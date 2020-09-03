@@ -120,16 +120,20 @@
                 function(event) {
                     // Grab the first path, which is the url the html expected to
                     // send us to
-                    let expectedPath = event.path[0].href;
+                    var expectedPath = ""
+                    for (let i = 0; i < event.path.length; i++){
+                        if (event.path[i].href && event.path[i].href.startsWith("http://localhost:8888/")) {
+                            expectedPath = event.path[i].href;
+                            break;
+                        }
+                    }
                     if (!expectedPath) {
                         return;
                     }
-                    if (expectedPath.startsWith("http://localhost:8888/")) {
-                        let newPath = expectedPath.slice(22).split(".html")[0];
-                        if (newPath !== currentPath) {
-                            currentPath = newPath;
-                            initPanes(currentPath);
-                        }
+                    let newPath = expectedPath.slice(22).split(".html")[0];
+                    if (newPath !== currentPath) {
+                        currentPath = newPath;
+                        initPanes(currentPath);
                     }
                 },
                 false
