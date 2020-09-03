@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en" style="height: 100%">
+<head>
+<title>Sphinx Viewer</title>
+<style type="text/css" media="screen">
+    #editor { 
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 10000000;
+    }
+    #flex-1 {
+        position: relative;
+    }
+    #output-frame {
+        height: 100%;
+        width: 100%;
+    }
+</style>
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+</head>
+<body style="height: 100%">
+
+<!-- <div class="flex">
+    <div id="data">
+        <iframe src="file:///Users/forrest/Proj/orion-platform/docs/_build/html/index.html"></iframe>
+    </div>
+</div> -->
+<!-- <div id="toolbar" style="display flex; position: sticky; top: 0px;">
+    <h1 style="f">Sphinx Viewer</h1>
+    <button onclick="goHome()">Home</button>
+    <button onclick="updateCurrent()">Save</button>
+</div> -->
+<nav class="navbar navbar-expand-md navbar-dark bg-dark mb-4">
+  <a class="navbar-brand" href="#">Sphinx Viewer</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+  <div class="collapse navbar-collapse" id="navbarCollapse">
+    <ul class="navbar-nav mr-auto">
+      <li class="nav-item active">
+        <a class="nav-link" href="#"onclick="goHome()">Home <span class="sr-only">(current)</span></a>
+      </li>
+      <li class="nav-item">
+        <button type="button" class="btn btn-success" onclick="updateCurrent()">Save</button>
+      </li>
+      <li class="nav-item">
+        <div id="working-spinner" class="spinner-border text-info" role="status" style="margin-left: 10px; visibility: hidden;">
+          <span class="sr-only">Loading...</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+</nav>
+<div id="flex" class="container-fluid" style="display: flex; height: 100%">
+    <div id="flex-1">
+        <div id="editor"></div>
+    </div>
+    <div id="flex-2">
+        <iframe id="output-frame" src=""></iframe>
+    </div>
+</div>
+    
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.11/ace.min.js" type="text/javascript" charset="utf-8"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.6.0/split.min.js"></script>
+
+<script>
+    var editor = ace.edit("editor");
+    var updateInterval = 30 * 1000; // 10 seconds
+    var currentPath = "index";
+    var lastUpdate = new Date().getTime();
+    // Eventually could create our own mode
+    // editor.session.setMode("ace/mode/javascript");
+
+    Split(['#flex-1', '#flex-2'], {
+    elementStyle: function(dimension, size, gutterSize) {
+        return {
+            'flex-basis': 'calc(' + size + '% - ' + gutterSize + 'px)',
+        }
+    },
+    gutterSize: 5,
+    gutterStyle: function(dimension, gutterSize) {
+        return {
+            'flex-basis': gutterSize + 'px',
+        }
+    },
+    })
+    function httpGetAsync(url, callback)
+    {
+        var xmlHttp = new XMLHttpRequest();
+        xmlHttp.onreadystatechange = function() { 
+            if (xmlHttp.readyState == 4 && xmlHttp.status == 200)
+                callback(xmlHttp.responseText);
+        }
+        xmlHttp.open("GET", url, true); // true for asynchronous 
+        xmlHttp.send(null);
+    }
+    function httpPostAsync(url, formData, callback)
+    {
+        var xmlHttp = new XMLHttpRequest();
+        xmlHttp.onreadystatechange = function() { 
+            if (xmlHttp.readyState == 4 && xmlHttp.status % 200 < 100)
+                callback(xmlHttp.responseText);
+        }
+        xmlHttp.open("POST", url, true); // true for asynchronous 
+        xmlHttp.send(formData);
+    }
+    function refreshHtml(path) {
+        httpGetAsync("http://localhost:8888/html/" + path, function(html) {
+            var iframe = document.getElementById("output-frame"),
+            iframeWin = iframe.contentWindow || iframe,
+            iframeDoc = iframe.contentDocument || iframeWin.document;
+            iframeDoc.open();
+            iframeDoc.write(html);
+            iframeDoc.close();
+            iframeDoc.addEventListener(
+                "click",
+                function(event) {
+                    // Grab the first path, which is the url the html expected to
+                    // send us to
+                    let expectedPath = event.path[0].href;
+                    if (!expectedPath) {
+                        return;
+                    }
+                    if (expectedPath.startsWith("http://localhost:8888/")) {
+                        let newPath = expectedPath.slice(22).split(".html")[0];
+                        if (newPath !== currentPath) {
+                            currentPath = newPath;
+                            initPanes(currentPath);
+                        }
+                    }
+                },
+                false
+            );
+            document.getElementById("working-spinner").style.visibility = "hidden";
+        });
+    }
+    function initPanes(path) {
+        httpGetAsync("http://localhost:8888/rst/" + path, function(text) {
+            editor.setValue(text);
+            editor.clearSelection();
+        });
+        refreshHtml(path);
+    }
+    function updateHtml(path) {
+        var text = editor.getValue();
+        var formData = new FormData();
+        formData.append("text", text);
+        console.log("Updating path", path)
+        document.getElementById("working-spinner").style.visibility = "visible";
+        httpPostAsync("http://localhost:8888/rst/" + path, formData, function(text) {
+            var buildStart = new Date().getTime()
+            httpPostAsync("http://localhost:8888/html/" + path, null, function(text) {
+                var totalTime = (new Date().getTime() - buildStart)
+                if (totalTime * 2 > updateInterval) {
+                    updateInterval = totalTime * 2;
+                    console.log("Updated interval going to", updateInterval);
+                }
+                lastUpdate = new Date().getTime();
+                refreshHtml(path);
+            });
+        });
+    }
+    function watchEditor() {
+        if (new Date().getTime() - lastUpdate > updateInterval) {
+            updateCurrent();
+            lastUpdate = new Date().getTime();
+        }
+        return setTimeout(
+            watchEditor,
+            updateInterval
+        )
+    }
+    var interval = watchEditor();
+    initPanes(currentPath);
+    function goHome() {
+        currentPath = "index";
+        initPanes(currentPath);
+    }
+
+    function updateCurrent() {
+        updateHtml(currentPath);
+    }
+</script>
+<style type="text/css">
+#flex {
+    display: flex;
+    flex-direction: row;
+}
+.gutter {
+    background-color: #eee;
+
+    background-repeat: no-repeat;
+    background-position: 50%;
+}
+
+.gutter.gutter-vertical {
+    background-image: url('grips/horizontal.png');
+    cursor: row-resize;
+}
+/*.split, .gutter.gutter-horizontal {
+    float: left;
+}
+.gutter.gutter-horizontal {
+    cursor: ew-resize;
+}
+.flex {
+    display: flex;
+    flex-direction: column;
+}
+.gutter.gutter-horizontal {
+    cursor: ew-resize;
+}*/
+</style>
+</body>
+</html>
