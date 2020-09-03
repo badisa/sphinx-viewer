@@ -1,6 +1,7 @@
 import os
 
 from typing import Optional, List
+from multiprocessing import cpu_count
 from subprocess import run
 
 
@@ -16,7 +17,9 @@ def build_html(source_dir: str, build_dir: str, files: Optional[List[str]] = Non
     Returns:
         bool: True, docs built successfully.
     """
-    args = ["sphinx-build", "-j", "auto", source_dir, f"{build_dir}/html/"]
+    # Can't use auto here, as not supported by older sphinx versions
+    num_cores = cpu_count()
+    args = ["sphinx-build", "-j", str(num_cores), source_dir, f"{build_dir}/html/"]
     if files is not None:
         for path in files:
             args.append(path)
