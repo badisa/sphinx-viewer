@@ -1,1 +1,1 @@
-recursive-include sphinxviewer/templates/
+include sphinxviewer/templates/index.html
