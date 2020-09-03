@@ -142,6 +142,8 @@ class RequestHandler(BaseHTTPRequestHandler):
 
 def serve_server(port: int, browser: bool = True):
     httpd = HTTPServer(("localhost", port), RequestHandler)
+    addr = f"http://localhost:{port}/"
     if browser:
-        webbrowser.open(f"http://localhost:{port}/")
+        webbrowser.open(addr)
+    print(f"Serving sphinx-viewer at {addr}")
     httpd.serve_forever()
